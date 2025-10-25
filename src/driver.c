@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <sys/wait.h>
 #include "../include/driver.h"
 #include "../include/hardware.h"
 
@@ -21,13 +23,13 @@ typedef struct {
 } DriverMapping;
 
 static const DriverMapping driver_db[] = {
-    // NVIDIA drivers
-    {HW_GPU_NVIDIA, NULL, "nvidia", "NVIDIA Proprietary Driver",
-     "Latest NVIDIA proprietary graphics driver", true, true},
+    // NVIDIA drivers - Complete stack with DKMS and 32-bit support
+    {HW_GPU_NVIDIA, NULL, "nvidia-dkms lib32-nvidia-utils nvidia-settings", "NVIDIA Complete Driver",
+     "NVIDIA driver with DKMS modules and 32-bit support", true, true},
+    {HW_GPU_NVIDIA, NULL, "nvidia", "NVIDIA Standard Driver",
+     "Standard NVIDIA proprietary graphics driver", true, false},
     {HW_GPU_NVIDIA, NULL, "nvidia-lts", "NVIDIA LTS Driver",
      "NVIDIA driver for LTS kernel", true, false},
-    {HW_GPU_NVIDIA, NULL, "nvidia-settings", "NVIDIA Settings",
-     "Configuration tool for NVIDIA graphics driver", false, true},
 
     // AMD drivers
     {HW_GPU_AMD, NULL, "xf86-video-amdgpu", "AMDGPU Driver",
@@ -56,11 +58,27 @@ static const DriverMapping driver_db[] = {
 
 static const int driver_db_size = sizeof(driver_db) / sizeof(DriverMapping);
 
-// Check if a package is installed
+// Check if a package (or multiple packages) is installed
+// For multiple packages separated by spaces, checks if ALL are installed
 bool is_driver_installed(const char *package_name) {
-    char command[256];
-    snprintf(command, sizeof(command), "pacman -Q %s > /dev/null 2>&1", package_name);
-    return system(command) == 0;
+    char packages[256];
+    strncpy(packages, package_name, sizeof(packages) - 1);
+    packages[sizeof(packages) - 1] = '\0';
+
+    // Check each package (space-separated)
+    char *token = strtok(packages, " ");
+    while (token != NULL) {
+        char command[256];
+        snprintf(command, sizeof(command), "pacman -Q %s > /dev/null 2>&1", token);
+        if (system(command) != 0) {
+            // At least one package not installed
+            return false;
+        }
+        token = strtok(NULL, " ");
+    }
+
+    // All packages are installed
+    return true;
 }
 
 // Detect available drivers for hardware
@@ -177,27 +195,81 @@ int detect_drivers(HardwareInfo *hw_list, int hw_count, DriverInfo **driver_list
 
 // Install a driver
 bool install_driver(DriverInfo *driver) {
-    if (driver->is_installed) {
-        printf("Driver %s is already installed\n", driver->package);
-        return true;
+    printf("\n=== Installing Driver ===\n");
+    printf("Driver: %s\n", driver->name);
+    printf("Package: %s\n", driver->package);
+    printf("========================\n\n");
+
+    // Verify we're running as root
+    if (geteuid() != 0) {
+        fprintf(stderr, "ERROR: Not running as root! Cannot install drivers.\n");
+        fprintf(stderr, "Current UID: %d (should be 0)\n", geteuid());
+        return false;
     }
 
-    printf("Installing driver: %s (%s)\n", driver->name, driver->package);
+    printf("Root privileges confirmed (UID: %d)\n", geteuid());
 
+    // First, sync the database
+    printf("\nSyncing package database...\n");
+    fflush(stdout);
+    int sync_result = system("pacman -Sy --noconfirm");
+    if (sync_result != 0) {
+        fprintf(stderr, "WARNING: Database sync failed (exit code: %d)\n", sync_result);
+        fprintf(stderr, "Continuing anyway...\n");
+    }
+
+    // Build pacman install command with --overwrite to handle file conflicts
     char command[512];
     snprintf(command, sizeof(command),
-            "pacman -S --noconfirm --needed %s",
+            "pacman -S --noconfirm --needed --overwrite '*' %s",
             driver->package);
+
+    printf("\nExecuting: %s\n", command);
+    printf("-----------------------------------\n");
+    fflush(stdout);
 
     int result = system(command);
 
+    printf("-----------------------------------\n");
+    printf("Command exit code: %d\n", result);
+
     if (result == 0) {
         driver->is_installed = true;
-        printf("Successfully installed %s\n", driver->package);
+        printf("\n✓ Successfully installed %s\n", driver->package);
+
+        // If this is a driver that needs reboot (kernel modules), rebuild initramfs
+        if (driver->needs_reboot) {
+            printf("\n=== Rebuilding Kernel Initramfs ===\n");
+            printf("Running: mkinitcpio -P\n");
+            printf("This may take a minute...\n");
+            printf("-----------------------------------\n");
+            fflush(stdout);
+
+            int mkinit_result = system("mkinitcpio -P");
+
+            printf("-----------------------------------\n");
+            if (mkinit_result == 0) {
+                printf("✓ Kernel initramfs rebuilt successfully\n\n");
+            } else {
+                fprintf(stderr, "⚠ Warning: mkinitcpio failed (exit code: %d)\n", mkinit_result);
+                fprintf(stderr, "You may need to run manually: sudo mkinitcpio -P\n\n");
+                // Don't fail the installation, just warn
+            }
+        }
+
         return true;
     } else {
-        fprintf(stderr, "Failed to install %s (exit code: %d)\n",
-                driver->package, result);
+        // Decode the exit code
+        int actual_exit = WEXITSTATUS(result);
+        fprintf(stderr, "\n✗ Failed to install %s\n", driver->package);
+        fprintf(stderr, "System return code: %d\n", result);
+        fprintf(stderr, "Actual exit status: %d\n", actual_exit);
+        fprintf(stderr, "\nPossible reasons:\n");
+        fprintf(stderr, "  - Package '%s' not found in repositories\n", driver->package);
+        fprintf(stderr, "  - Network connection issue\n");
+        fprintf(stderr, "  - Package database out of sync\n");
+        fprintf(stderr, "  - Conflicting packages\n");
+        fprintf(stderr, "\nTry manually: sudo pacman -S %s\n\n", driver->package);
         return false;
     }
 }

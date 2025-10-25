@@ -1,0 +1,119 @@
+╔════════════════════════════════════════════════════════════════╗
+║          SYSTEM DRIVERS - HOW IT WORKS WITH SUDO               ║
+╔════════════════════════════════════════════════════════════════╗
+
+✓ YES - IT REQUIRES SUDO
+✓ YES - IT WILL INSTALL DRIVERS  
+✓ YES - IT WILL REINSTALL DRIVERS (OVERWRITE)
+✓ YES - IT USES REAL PACMAN COMMANDS
+
+════════════════════════════════════════════════════════════════
+
+HOW TO RUN:
+───────────
+
+Method 1 (Automatic):
+  $ ./bin/system-drivers
+  → Program detects no root, asks for password automatically
+
+Method 2 (Manual):
+  $ sudo ./bin/system-drivers
+  → You provide password, program runs with root
+
+════════════════════════════════════════════════════════════════
+
+WHAT HAPPENS WHEN YOU CLICK "INSTALL":
+───────────────────────────────────────
+
+1. GUI shows confirmation dialog
+2. You click "Yes"
+3. Status bar updates: "Installing <driver>..."
+4. Program checks: Am I root? (YES - from sudo)
+5. Program runs:
+   
+   For NEW drivers:
+   ┌────────────────────────────────────────────────────┐
+   │ pacman -S --noconfirm --needed nvidia              │
+   └────────────────────────────────────────────────────┘
+   
+   For REINSTALL (already installed):
+   ┌────────────────────────────────────────────────────┐
+   │ pacman -S --noconfirm nvidia                       │
+   │ (no --needed = forces reinstall/overwrite)         │
+   └────────────────────────────────────────────────────┘
+
+6. Terminal shows pacman output (downloads, installs)
+7. Status bar updates: "Successfully installed <driver>!"
+8. Success dialog appears
+9. Driver list refreshes
+
+════════════════════════════════════════════════════════════════
+
+EXAMPLE OUTPUT IN TERMINAL:
+────────────────────────────
+
+$ sudo ./bin/system-drivers
+System Drivers starting with root privileges...
+
+[You click Install on NVIDIA driver]
+
+Installing driver: NVIDIA Proprietary Driver (nvidia)
+Installing new driver...
+Running: pacman -S --noconfirm --needed nvidia
+Executing pacman command...
+resolving dependencies...
+looking for conflicting packages...
+
+Packages (1) nvidia-550.120-1
+
+Total Download Size:   62.50 MiB
+Total Installed Size:  189.23 MiB
+
+[:: Downloading packages...]
+[nvidia installation proceeds]
+Successfully installed nvidia
+
+════════════════════════════════════════════════════════════════
+
+WHY IT WORKS:
+─────────────
+
+• Main program runs as root (via sudo)
+• system() call inherits root privileges
+• pacman runs with root privileges
+• Drivers get installed successfully
+
+Root privileges verified at:
+  1. Program startup (main.c)
+  2. Before pacman call (driver.c)
+
+════════════════════════════════════════════════════════════════
+
+DIFFERENCE: INSTALL vs REINSTALL
+─────────────────────────────────
+
+Button shows "Install":
+  → Driver not currently installed
+  → Command: pacman -S --noconfirm --needed <package>
+  → Installs fresh copy
+
+Button shows "Reinstall":  
+  → Driver already installed
+  → Command: pacman -S --noconfirm <package>
+  → Forces reinstall, overwrites existing files
+  → Useful for fixing corrupted drivers
+
+════════════════════════════════════════════════════════════════
+
+TEST IT NOW:
+────────────
+
+$ sudo ./bin/system-drivers
+
+1. Window opens showing available drivers
+2. Click Install/Reinstall on any driver
+3. Watch terminal for pacman output
+4. Watch status bar at bottom of window
+5. Driver will actually install!
+
+════════════════════════════════════════════════════════════════

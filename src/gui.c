@@ -12,6 +12,7 @@
 // Global variables for UI elements
 static GtkWidget *driver_list_box = NULL;
 static GtkWidget *main_window_ref = NULL;
+static GtkWidget *status_bar = NULL;
 static DriverInfo *current_drivers = NULL;
 static int driver_count = 0;
 
@@ -19,6 +20,17 @@ static int driver_count = 0;
 typedef struct {
     int driver_index;
 } DriverButtonData;
+
+// Helper function to update status bar
+static void update_status(const char *message) {
+    if (status_bar != NULL) {
+        gtk_label_set_text(GTK_LABEL(status_bar), message);
+        // Force GUI to update
+        while (gtk_events_pending()) {
+            gtk_main_iteration();
+        }
+    }
+}
 
 // Callback for window close
 static void on_window_destroy(GtkWidget *widget, gpointer data) {
@@ -45,17 +57,11 @@ static void on_driver_install_clicked(GtkButton *button, gpointer user_data) {
 
     DriverInfo *driver = &current_drivers[driver_idx];
 
-    // Show confirmation
+    // Show confirmation (only for non-installed drivers)
     char confirm_msg[512];
-    if (driver->is_installed) {
-        snprintf(confirm_msg, sizeof(confirm_msg),
-                "Reinstall %s?\n\nPackage: %s\n%s",
-                driver->name, driver->package, driver->description);
-    } else {
-        snprintf(confirm_msg, sizeof(confirm_msg),
-                "Install %s?\n\nPackage: %s\n%s",
-                driver->name, driver->package, driver->description);
-    }
+    snprintf(confirm_msg, sizeof(confirm_msg),
+            "Install %s?\n\nPackage: %s\n%s",
+            driver->name, driver->package, driver->description);
 
     GtkWidget *confirm_dialog = gtk_message_dialog_new(GTK_WINDOW(main_window_ref),
                                                        GTK_DIALOG_DESTROY_WITH_PARENT,
@@ -66,14 +72,23 @@ static void on_driver_install_clicked(GtkButton *button, gpointer user_data) {
     gtk_widget_destroy(confirm_dialog);
 
     if (response != GTK_RESPONSE_YES) {
+        update_status("Installation cancelled.");
         return;
     }
+
+    // Update status bar
+    char status_msg[256];
+    snprintf(status_msg, sizeof(status_msg), "Installing %s...", driver->name);
+    update_status(status_msg);
 
     // Install the driver
     printf("Installing %s...\n", driver->name);
     bool success = install_driver(driver);
 
     if (success) {
+        snprintf(status_msg, sizeof(status_msg), "Successfully installed %s!", driver->name);
+        update_status(status_msg);
+
         // Check if reboot needed
         if (driver->needs_reboot) {
             show_reboot_dialog(main_window_ref);
@@ -90,7 +105,11 @@ static void on_driver_install_clicked(GtkButton *button, gpointer user_data) {
 
         // Refresh the list
         refresh_driver_list(driver_list_box);
+        update_status("Ready.");
     } else {
+        snprintf(status_msg, sizeof(status_msg), "Failed to install %s", driver->name);
+        update_status(status_msg);
+
         char error_msg[256];
         snprintf(error_msg, sizeof(error_msg),
                 "Failed to install %s\n\nCheck terminal output for details.",
@@ -147,9 +166,9 @@ GtkWidget* create_main_window(void) {
     gtk_container_add(GTK_CONTAINER(scrolled), driver_list_box);
 
     // Create status bar
-    GtkWidget *statusbar = gtk_label_new("Ready. Click 'Refresh Drivers' to scan for available drivers.");
-    gtk_label_set_xalign(GTK_LABEL(statusbar), 0.0);
-    gtk_box_pack_start(GTK_BOX(vbox), statusbar, FALSE, FALSE, 5);
+    status_bar = gtk_label_new("Ready. Click 'Refresh Drivers' to scan for available drivers.");
+    gtk_label_set_xalign(GTK_LABEL(status_bar), 0.0);
+    gtk_box_pack_start(GTK_BOX(vbox), status_bar, FALSE, FALSE, 5);
 
     // Initial scan
     refresh_driver_list(driver_list_box);
@@ -218,14 +237,24 @@ void refresh_driver_list(GtkWidget *list_box) {
         gtk_label_set_xalign(GTK_LABEL(label), 0.0);
         gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 5);
 
-        // Install/Reinstall button
-        DriverButtonData *btn_data = malloc(sizeof(DriverButtonData));
-        btn_data->driver_index = i;
+        // Install/Installed button
+        GtkWidget *install_btn;
 
-        const char *button_label = current_drivers[i].is_installed ? "Reinstall" : "Install";
-        GtkWidget *install_btn = gtk_button_new_with_label(button_label);
-        g_signal_connect(install_btn, "clicked", G_CALLBACK(on_driver_install_clicked), btn_data);
-        gtk_widget_set_size_request(install_btn, 100, -1);
+        if (current_drivers[i].is_installed) {
+            // Already installed - show disabled "Installed" button
+            install_btn = gtk_button_new_with_label("Installed");
+            gtk_widget_set_sensitive(install_btn, FALSE);  // Disable the button
+            gtk_widget_set_size_request(install_btn, 100, -1);
+        } else {
+            // Not installed - show clickable "Install" button
+            DriverButtonData *btn_data = malloc(sizeof(DriverButtonData));
+            btn_data->driver_index = i;
+
+            install_btn = gtk_button_new_with_label("Install");
+            g_signal_connect(install_btn, "clicked", G_CALLBACK(on_driver_install_clicked), btn_data);
+            gtk_widget_set_size_request(install_btn, 100, -1);
+        }
+
         gtk_box_pack_start(GTK_BOX(hbox), install_btn, FALSE, FALSE, 5);
 
         gtk_list_box_insert(GTK_LIST_BOX(list_box), row, -1);
