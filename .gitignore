@@ -1,0 +1,30 @@
+# Build directories
+build/
+bin/
+
+# Object files
+*.o
+*.obj
+
+# Executables
+system-drivers
+*.exe
+*.out
+
+# Debug files
+*.dSYM/
+*.su
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
