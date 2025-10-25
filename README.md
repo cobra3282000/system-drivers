@@ -1,15 +1,15 @@
 # System Drivers
 
-A lightweight driver management utility for Arch Linux and Arch-based distributions (including Acreetinos OS). System Drivers automatically scans for available hardware drivers, detects updates, and provides a simple interface for installation.
+A lightweight desktop GUI driver management application for Arch Linux and Arch-based distributions (including Acreetinos OS). System Drivers automatically scans for available hardware drivers, detects updates, and provides a graphical interface for easy driver installation.
 
 ## Features
 
 - **Automatic Driver Detection**: Scans system hardware and identifies available drivers
 - **Video Driver Support**: Detects and manages graphics drivers (NVIDIA, AMD, Intel)
-- **Interactive Selection**: User-friendly interface to select which drivers to install
+- **Graphical Interface**: Clean, user-friendly desktop application for driver selection
 - **Smart Reboot Detection**: Automatically determines when a system reboot is required
-- **Minimal Dependencies**: Written in C for performance and low overhead
-- **Desktop Integration**: Designed to run seamlessly on desktop environments
+- **Minimal Dependencies**: Written in C with GTK for performance and low overhead
+- **Desktop Integration**: Native desktop application with system tray support
 
 ## Supported Drivers
 
@@ -38,30 +38,28 @@ sudo make install
 
 ## Usage
 
-Run the application with root privileges:
+Launch the application from your desktop environment:
 
-```bash
-sudo system-drivers
-```
+- **Application Menu**: Find "System Drivers" in your application launcher
+- **Command Line**: Run `system-drivers` from terminal
+- **Desktop**: Double-click the System Drivers desktop icon
 
-The application will:
-1. Scan your system hardware
-2. Check for available and updated drivers
-3. Present a list of drivers with installation options
-4. Allow you to select which drivers to install
-5. Prompt for reboot if necessary after installation
+The application will open a GUI window that:
+1. Scans your system hardware automatically
+2. Displays available and updated drivers in a list
+3. Shows driver details and recommendations
+4. Allows you to select drivers using checkboxes
+5. Installs selected drivers with a progress indicator
+6. Prompts for reboot if necessary after installation
 
-### Command Line Options
+### GUI Features
 
-```bash
-sudo system-drivers [OPTIONS]
-
-Options:
-  -h, --help        Display this help message
-  -s, --scan        Scan for drivers without installing
-  -v, --verbose     Enable verbose output
-  -y, --yes         Auto-confirm installations (use with caution)
-```
+- **Driver List View**: Browse available drivers with status indicators
+- **Details Panel**: View driver information, version, and compatibility
+- **Search Filter**: Quick search to find specific drivers
+- **Automatic Updates**: Option to check for driver updates on startup
+- **System Tray Icon**: Minimize to system tray for background operation
+- **Notifications**: Desktop notifications for driver availability
 
 ## Configuration
 
@@ -87,22 +85,26 @@ enable=true
 - pacman (package manager)
 - hwinfo or lspci (hardware detection)
 - systemd (for reboot management)
+- GTK3 (graphical interface)
+- polkit (for privilege escalation)
 
 ### Build Dependencies
 - gcc
 - make
 - pkg-config
-- gtk3-dev (for GUI support, optional)
+- gtk3-dev (GTK3 development libraries)
+- libnotify-dev (desktop notifications)
 
 ## Architecture
 
 System Drivers is built with modularity in mind:
 
-- **Hardware Scanner**: Detects installed hardware components
+- **Hardware Scanner**: Detects installed hardware components using hwinfo/lspci
 - **Driver Database**: Maintains mappings between hardware and available drivers
 - **Package Manager Interface**: Handles driver installation via pacman
 - **Reboot Manager**: Determines when reboots are necessary
-- **User Interface**: Interactive terminal or GUI for driver selection
+- **GTK GUI**: Native desktop interface built with GTK3
+- **Polkit Integration**: Secure privilege escalation for driver installation without sudo prompts
 
 ## Development
 
@@ -155,28 +157,28 @@ This project is licensed under the GPL-3.0 License - see the LICENSE file for de
 
 ## Roadmap
 
-- [ ] GUI interface using GTK
+- [x] Desktop GUI interface using GTK3
 - [ ] Automatic background scanning service
 - [ ] Driver backup and rollback functionality
 - [ ] Support for AUR drivers
 - [ ] Kernel module management
-- [ ] Desktop notifications for driver updates
+- [ ] Enhanced desktop notifications for driver updates
 - [ ] Multi-language support
+- [ ] Dark theme support
+- [ ] Driver performance metrics
 
 ## Troubleshooting
 
 ### Driver not detected
-```bash
-# Manually scan hardware
-sudo hwinfo --short
-# Run in verbose mode
-sudo system-drivers --verbose
-```
+- Click the "Refresh" button in the application to rescan hardware
+- Manually check hardware: `sudo hwinfo --short`
+- Check application logs from the Help menu or at `/var/log/system-drivers.log`
 
 ### Installation fails
 - Ensure you have an active internet connection
 - Update package databases: `sudo pacman -Sy`
-- Check logs: `/var/log/system-drivers.log`
+- Check logs in the application's log viewer or `/var/log/system-drivers.log`
+- Verify you granted permission when polkit prompted for authentication
 
 ### System won't reboot
 The application only prompts for reboot - it doesn't force it. Manually reboot:
